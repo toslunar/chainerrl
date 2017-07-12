@@ -113,8 +113,6 @@ class PGT(AttributeSavingMixin, ReplayBufferingMixin, Agent):
         self.batch_states = batch_states
 
         self.t = 0
-        self.last_state = None
-        self.last_action = None
         self.target_model = copy.deepcopy(self.model)
         disable_train(self.target_model['q_function'])
         disable_train(self.target_model['policy'])

@@ -123,8 +123,8 @@ class ReplayBufferingMixin(object):
         """
 
     def act_and_train(self, state, reward):
+        self.logger.debug('t:%s r:%s', self.t, reward)
         action = self.exploring_act(state)
-        self.logger.debug('t:%s r:%s a:%s', self.t, reward, action)
 
         if self.last_state is not None:
             assert self.last_action is not None

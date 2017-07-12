@@ -417,6 +417,7 @@ class DQN(agent.AttributeSavingMixin, agent.ReplayBufferingMixin, agent.Agent):
 
         action = self.explorer.select_action(
             self.t, lambda: greedy_action, action_value=action_value)
+        self.logger.debug('t:%s a:%s', self.t, action)
         return action
 
     def train(self):

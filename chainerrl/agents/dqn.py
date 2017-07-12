@@ -91,7 +91,7 @@ def compute_weighted_value_loss(y, t, weights,
     return loss
 
 
-class DQN(agent.AttributeSavingMixin, agent.Agent):
+class DQN(agent.AttributeSavingMixin, agent.ReplayBufferingMixin, agent.Agent):
     """Deep Q-Network algorithm.
 
     Args:
@@ -147,7 +147,7 @@ class DQN(agent.AttributeSavingMixin, agent.Agent):
             self.model.to_gpu(device=gpu)
 
         self.xp = self.model.xp
-        self.replay_buffer = replay_buffer
+        self.init_replay_buffering(replay_buffer)
         self.optimizer = optimizer
         self.gamma = gamma
         self.explorer = explorer
@@ -177,8 +177,6 @@ class DQN(agent.AttributeSavingMixin, agent.Agent):
         )
 
         self.t = 0
-        self.last_state = None
-        self.last_action = None
         self.target_model = None
         self.sync_target_network()
         # For backward compatibility
@@ -401,7 +399,7 @@ class DQN(agent.AttributeSavingMixin, agent.Agent):
         self.logger.debug('t:%s q:%s action_value:%s', self.t, q, action_value)
         return action
 
-    def act_and_train(self, state, reward):
+    def exploring_act(self, state):
 
         with chainer.using_config('train', False):
             with chainer.no_backprop_mode():
@@ -419,58 +417,20 @@ class DQN(agent.AttributeSavingMixin, agent.Agent):
 
         action = self.explorer.select_action(
             self.t, lambda: greedy_action, action_value=action_value)
+        return action
+
+    def train(self):
         self.t += 1
 
         # Update the target network
         if self.t % self.target_update_interval == 0:
             self.sync_target_network()
 
-        if self.last_state is not None:
-            assert self.last_action is not None
-            # Add a transition to the replay buffer
-            self.replay_buffer.append(
-                state=self.last_state,
-                action=self.last_action,
-                reward=reward,
-                next_state=state,
-                next_action=action,
-                is_state_terminal=False)
-
-        self.last_state = state
-        self.last_action = action
-
         self.replay_updater.update_if_necessary(self.t)
 
-        self.logger.debug('t:%s r:%s a:%s', self.t, reward, action)
-
-        return self.last_action
-
-    def stop_episode_and_train(self, state, reward, done=False):
-        """Observe a terminal state and a reward.
-
-        This function must be called once when an episode terminates.
-        """
-
-        assert self.last_state is not None
-        assert self.last_action is not None
-
-        # Add a transition to the replay buffer
-        self.replay_buffer.append(
-            state=self.last_state,
-            action=self.last_action,
-            reward=reward,
-            next_state=state,
-            next_action=self.last_action,
-            is_state_terminal=done)
-
-        self.stop_episode()
-
     def stop_episode(self):
-        self.last_state = None
-        self.last_action = None
         if isinstance(self.model, Recurrent):
             self.model.reset_state()
-        self.replay_buffer.stop_current_episode()
 
     def get_statistics(self):
         return [

@@ -100,6 +100,74 @@ class Agent(with_metaclass(ABCMeta, object)):
         pass
 
 
+class ReplayBufferingMixin(object):
+    """Mixin that provides transition memorization."""
+
+    def init_replay_buffering(self, replay_buffer):
+        self.replay_buffer = replay_buffer
+        self.last_state = None
+        self.last_action = None
+
+    @abstractmethod
+    def exploring_act(self, state):
+        """Select an action for training.
+
+        Returns:
+            ~object: action
+        """
+
+    @abstractmethod
+    def train(self):
+        """Train
+
+        """
+
+    def act_and_train(self, state, reward):
+        action = self.exploring_act(state)
+        self.logger.debug('t:%s r:%s a:%s', self.t, reward, action)
+
+        if self.last_state is not None:
+            assert self.last_action is not None
+            # Add a transition to the replay buffer
+            self.replay_buffer.append(
+                state=self.last_state,
+                action=self.last_action,
+                reward=reward,
+                next_state=state,
+                next_action=action,
+                is_state_terminal=False)
+
+        self.last_state = state
+        self.last_action = action
+
+        self.train()
+        return action
+
+    def stop_episode_and_train(self, state, reward, done=False):
+        """Observe a terminal state and a reward.
+
+        This function must be called once when an episode terminates.
+        """
+
+        assert self.last_state is not None
+        assert self.last_action is not None
+
+        # Add a transition to the replay buffer
+        self.replay_buffer.append(
+            state=self.last_state,
+            action=self.last_action,
+            reward=reward,
+            next_state=state,
+            next_action=self.last_action,
+            is_state_terminal=done)
+
+        self.last_state = None
+        self.last_action = None
+        self.replay_buffer.stop_current_episode()
+
+        self.stop_episode()
+
+
 class AttributeSavingMixin(object):
     """Mixin that provides save and load functionalities."""
 

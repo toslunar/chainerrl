@@ -15,6 +15,7 @@ import chainer.functions as F
 
 from chainerrl.agent import Agent
 from chainerrl.agent import AttributeSavingMixin
+from chainerrl.agent import ReplayBufferingMixin
 from chainerrl.misc.batch_states import batch_states
 from chainerrl.misc.copy_param import synchronize_parameters
 from chainerrl.recurrent import Recurrent
@@ -40,7 +41,7 @@ class DDPGModel(chainer.Chain, RecurrentChainMixin):
         super().__init__(policy=policy, q_function=q_func)
 
 
-class DDPG(AttributeSavingMixin, Agent):
+class DDPG(AttributeSavingMixin, ReplayBufferingMixin, Agent):
     """Deep Deterministic Policy Gradients.
 
     This can be used as SVG(0) by specifying a Gaussina policy instead of a
@@ -104,7 +105,7 @@ class DDPG(AttributeSavingMixin, Agent):
             self.model.to_gpu(device=gpu)
 
         self.xp = self.model.xp
-        self.replay_buffer = replay_buffer
+        self.init_replay_buffering(replay_buffer)
         self.gamma = gamma
         self.explorer = explorer
         self.gpu = gpu
@@ -299,35 +300,19 @@ class DDPG(AttributeSavingMixin, Agent):
                 actor_loss += self.compute_actor_loss(batch)
             self.actor_optimizer.update(lambda: actor_loss / max_epi_len)
 
-    def act_and_train(self, state, reward):
-
-        self.logger.debug('t:%s r:%s', self.t, reward)
-
+    def exploring_act(self, state):
         greedy_action = self.act(state)
         action = self.explorer.select_action(self.t, lambda: greedy_action)
+        return action
+
+    def train(self):
         self.t += 1
 
         # Update the target network
         if self.t % self.target_update_interval == 0:
             self.sync_target_network()
 
-        if self.last_state is not None:
-            assert self.last_action is not None
-            # Add a transition to the replay buffer
-            self.replay_buffer.append(
-                state=self.last_state,
-                action=self.last_action,
-                reward=reward,
-                next_state=state,
-                next_action=action,
-                is_state_terminal=False)
-
-        self.last_state = state
-        self.last_action = action
-
         self.replay_updater.update_if_necessary(self.t)
-
-        return self.last_action
 
     def act(self, state):
 
@@ -345,28 +330,9 @@ class DDPG(AttributeSavingMixin, Agent):
                           self.t, action.data[0], q.data)
         return cuda.to_cpu(action.data[0])
 
-    def stop_episode_and_train(self, state, reward, done=False):
-
-        assert self.last_state is not None
-        assert self.last_action is not None
-
-        # Add a transition to the replay buffer
-        self.replay_buffer.append(
-            state=self.last_state,
-            action=self.last_action,
-            reward=reward,
-            next_state=state,
-            next_action=self.last_action,
-            is_state_terminal=done)
-
-        self.stop_episode()
-
     def stop_episode(self):
-        self.last_state = None
-        self.last_action = None
         if isinstance(self.model, Recurrent):
             self.model.reset_state()
-        self.replay_buffer.stop_current_episode()
 
     def get_statistics(self):
         return [

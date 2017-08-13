@@ -345,6 +345,7 @@ class PCL(agent.AttributeSavingMixin, agent.AsyncAgent):
 
     def update_on_policy(self, statevar):
         assert self.t_start < self.t
+        assert self.t_max is None or self.t - self.t_start <= self.t_max
 
         if not self.disable_online_update:
             next_values = {}

@@ -53,6 +53,7 @@ def main():
     parser.add_argument('--tau', type=float, default=1e-2)
     parser.add_argument('--profile', action='store_true')
     parser.add_argument('--steps', type=int, default=8 * 10 ** 7)
+    parser.add_argument('--step-offset', type=int, default=0)
     parser.add_argument('--eval-interval', type=int, default=10 ** 5)
     parser.add_argument('--eval-n-runs', type=int, default=10)
     parser.add_argument('--reward-scale-factor', type=float, default=1e-2)
@@ -199,6 +200,7 @@ def main():
                 eval_env=make_env(0, test=True),
                 outdir=args.outdir,
                 steps=args.steps,
+                step_offset=args.step_offset,
                 eval_n_runs=args.eval_n_runs,
                 eval_interval=args.eval_interval,
                 max_episode_len=timestep_limit)

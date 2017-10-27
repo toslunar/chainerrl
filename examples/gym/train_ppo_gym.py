@@ -171,6 +171,7 @@ def main():
                 minibatch_size=args.batchsize, epochs=args.epochs,
                 clip_eps_vf=None, entropy_coef=args.entropy_coef,
                 standardize_advantages=args.standardize_advantages,
+                kl_max=0.1,
                 )
 
     if args.load:

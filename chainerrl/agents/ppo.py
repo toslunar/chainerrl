@@ -7,6 +7,7 @@ from future import standard_library
 standard_library.install_aliases()
 
 import copy
+from logging import getLogger
 
 import chainer
 from chainer import cuda
@@ -14,6 +15,7 @@ import chainer.functions as F
 
 from chainerrl import agent
 from chainerrl.misc.batch_states import batch_states
+from chainerrl.misc import copy_param
 
 
 def _elementwise_clip(x, x_min, x_max):
@@ -69,6 +71,8 @@ class PPO(agent.AttributeSavingMixin, agent.Agent):
                  clip_eps=0.2,
                  clip_eps_vf=None,
                  standardize_advantages=True,
+                 kl_max=None,
+                 logger=getLogger(__name__),
                  average_v_decay=0.999, average_loss_decay=0.99,
                  ):
         self.model = model
@@ -89,6 +93,9 @@ class PPO(agent.AttributeSavingMixin, agent.Agent):
         self.clip_eps = clip_eps
         self.clip_eps_vf = clip_eps_vf
         self.standardize_advantages = standardize_advantages
+        self.kl_max = kl_max
+
+        self.logger = logger
 
         self.average_v = 0
         self.average_v_decay = average_v_decay
@@ -98,7 +105,6 @@ class PPO(agent.AttributeSavingMixin, agent.Agent):
         self.average_loss_decay = average_loss_decay
 
         self.xp = self.model.xp
-        self.target_model = None
         self.last_state = None
 
         self.memory = []
@@ -220,6 +226,28 @@ class PPO(agent.AttributeSavingMixin, agent.Agent):
                 vs_teacher=xp.array(
                     [b['v_teacher'] for b in batch], dtype=xp.float32),
                 )
+
+        if self.kl_max is not None:
+            for n_search in range(10):
+                # Compute KL divergence (old || new)
+
+                states = batch_states([b['state'] for b in self.memory], xp, self.phi)
+
+                with chainer.no_backprop_mode():
+                    new_distribs, _ = self.model(states)
+                    old_distribs, _ = target_model(states)
+                    kl = old_distribs.kl(new_distribs).data
+
+                kl = xp.mean(kl)
+                self.logger.debug('(%s-th iter) kl: %s', n_search, kl)
+                if kl < self.kl_max:
+                    break
+
+                copy_param.soft_copy_param(
+                    target_link=self.model,
+                    source_link=target_model,
+                    tau=0.5)
+
 
     def act_and_train(self, state, reward):
         if hasattr(self.model, 'obs_filter'):

@@ -10,6 +10,7 @@ import os
 import sys
 import warnings
 
+import gym
 import numpy as np
 
 from chainerrl import env
@@ -50,7 +51,7 @@ except Exception:
         'atari_py is not available. You need to install atari_py>=0.1.1 to use ALE.')  # NOQA
 
 
-class ALE(env.Env):
+class ALE(gym.Env, env.Env):
     """Arcade Learning Environment."""
 
     def __init__(self, game, seed=None, use_sdl=False, n_last_screens=4,
@@ -212,13 +213,13 @@ class ALE(env.Env):
         self.lives_lost = False
         self.lives = self.ale.lives()
 
-    def reset(self):
+    def _reset(self):
         self.initialize()
         return self.state
 
-    def step(self, action):
+    def _step(self, action):
         self.receive_action(action)
         return self.state, self.reward, self.is_terminal, {}
 
-    def close(self):
+    def _close(self):
         pass

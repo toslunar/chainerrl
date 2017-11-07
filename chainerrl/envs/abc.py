@@ -7,12 +7,13 @@ from future import standard_library
 standard_library.install_aliases()
 
 import numpy as np
+import gym
 
 from chainerrl import env
 from chainerrl import spaces
 
 
-class ABC(env.Env):
+class ABC(gym.Env, env.Env):
     """Toy problem for only a testing purpose.
 
     The optimal policy is:
@@ -47,7 +48,7 @@ class ABC(env.Env):
         state_vec[self._state + self._offset] = 1.0
         return state_vec
 
-    def reset(self):
+    def _reset(self):
         self._state = 0
         if self.partially_observable:
             # For partially observable settings, observations are shifted by
@@ -61,7 +62,7 @@ class ABC(env.Env):
             self._offset = 0
         return self.observe()
 
-    def step(self, action):
+    def _step(self, action):
         if isinstance(action, np.ndarray):
             action = np.clip(action,
                              self.action_space.low,
@@ -95,5 +96,5 @@ class ABC(env.Env):
                 self._state = self.terminal_state
         return self.observe(), reward, done, {}
 
-    def close(self):
+    def _close(self):
         pass

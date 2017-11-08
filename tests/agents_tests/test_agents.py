@@ -10,8 +10,6 @@ import unittest
 
 from chainer import optimizers
 from chainer import testing
-import gym
-gym.undo_logger_setup()
 
 from chainerrl import agents
 from chainerrl.envs.abc import ABC
@@ -20,15 +18,16 @@ from chainerrl import explorers
 from chainerrl import policies
 from chainerrl import q_functions
 from chainerrl import replay_buffer
+from chainerrl import spaces
 from chainerrl import v_function
 
 
 def create_stochastic_policy_for_env(env):
-    assert isinstance(env.observation_space, gym.spaces.Box)
+    assert isinstance(env.observation_space, spaces.Box)
     ndim_obs = env.observation_space.low.size
-    if isinstance(env.action_space, gym.spaces.Discrete):
+    if isinstance(env.action_space, spaces.Discrete):
         return policies.FCSoftmaxPolicy(ndim_obs, env.action_space.n)
-    elif isinstance(env.action_space, gym.spaces.Box):
+    elif isinstance(env.action_space, spaces.Box):
         return policies.FCGaussianPolicy(
             ndim_obs, env.action_space.low.size,
             bound_mean=False)
@@ -37,8 +36,8 @@ def create_stochastic_policy_for_env(env):
 
 
 def create_deterministic_policy_for_env(env):
-    assert isinstance(env.observation_space, gym.spaces.Box)
-    assert isinstance(env.action_space, gym.spaces.Box)
+    assert isinstance(env.observation_space, spaces.Box)
+    assert isinstance(env.action_space, spaces.Box)
     ndim_obs = env.observation_space.low.size
     return policies.FCDeterministicPolicy(
         n_input_channels=ndim_obs,
@@ -49,15 +48,15 @@ def create_deterministic_policy_for_env(env):
 
 
 def create_state_q_function_for_env(env):
-    assert isinstance(env.observation_space, gym.spaces.Box)
+    assert isinstance(env.observation_space, spaces.Box)
     ndim_obs = env.observation_space.low.size
-    if isinstance(env.action_space, gym.spaces.Discrete):
+    if isinstance(env.action_space, spaces.Discrete):
         return q_functions.FCStateQFunctionWithDiscreteAction(
             ndim_obs=ndim_obs,
             n_actions=env.action_space.n,
             n_hidden_channels=200,
             n_hidden_layers=2)
-    elif isinstance(env.action_space, gym.spaces.Box):
+    elif isinstance(env.action_space, spaces.Box):
         return q_functions.FCQuadraticStateQFunction(
             n_input_channels=ndim_obs,
             n_dim_action=env.action_space.low.size,
@@ -69,8 +68,8 @@ def create_state_q_function_for_env(env):
 
 
 def create_state_action_q_function_for_env(env):
-    assert isinstance(env.observation_space, gym.spaces.Box)
-    assert isinstance(env.action_space, gym.spaces.Box)
+    assert isinstance(env.observation_space, spaces.Box)
+    assert isinstance(env.action_space, spaces.Box)
     ndim_obs = env.observation_space.low.size
     return q_functions.FCSAQFunction(
         n_dim_obs=ndim_obs,
@@ -80,7 +79,7 @@ def create_state_action_q_function_for_env(env):
 
 
 def create_v_function_for_env(env):
-    assert isinstance(env.observation_space, gym.spaces.Box)
+    assert isinstance(env.observation_space, spaces.Box)
     ndim_obs = env.observation_space.low.size
     return v_function.FCVFunction(ndim_obs)
 

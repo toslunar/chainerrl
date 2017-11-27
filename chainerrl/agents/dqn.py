@@ -315,13 +315,10 @@ class DQN(agent.AttributeSavingMixin, agent.Agent):
         qout = self.model(batch_state)
 
         batch_actions = exp_batch['action']
-        batch_q = F.reshape(qout.evaluate_actions(
-            batch_actions), (batch_size, 1))
+        batch_q = qout.evaluate_actions(batch_actions)
 
         with chainer.no_backprop_mode():
-            batch_q_target = F.reshape(
-                self._compute_target_values(exp_batch, gamma),
-                (batch_size, 1))
+            batch_q_target = self._compute_target_values(exp_batch, gamma)
 
         return batch_q, batch_q_target
 

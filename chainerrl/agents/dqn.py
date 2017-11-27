@@ -35,8 +35,8 @@ def compute_value_loss(y, t, clip_delta=True, batch_accumulator='mean'):
         (Variable) scalar loss
     """
     assert batch_accumulator in ('mean', 'sum')
-    y = F.reshape(y, (-1, 1))
-    t = F.reshape(t, (-1, 1))
+    y = F.expand_dims(y, axis=1)
+    t = F.expand_dims(t, axis=1)
     if clip_delta:
         loss_sum = F.sum(F.huber_loss(y, t, delta=1.0))
         if batch_accumulator == 'mean':
@@ -66,13 +66,13 @@ def compute_weighted_value_loss(y, t, weights,
         (Variable) scalar loss
     """
     assert batch_accumulator in ('mean', 'sum')
-    y = F.reshape(y, (-1, 1))
-    t = F.reshape(t, (-1, 1))
+    y = F.expand_dims(y, axis=1)
+    t = F.expand_dims(t, axis=1)
     if clip_delta:
         losses = F.huber_loss(y, t, delta=1.0)
     else:
         losses = F.square(y - t) / 2
-    losses = F.reshape(losses, (-1,))
+    losses = F.squeeze(losses, axis=1)
     loss_sum = F.sum(losses * weights)
     if batch_accumulator == 'mean':
         loss = loss_sum / y.shape[0]

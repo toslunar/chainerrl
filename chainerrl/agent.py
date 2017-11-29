@@ -183,6 +183,49 @@ class ActStepMixin(object):
             del self.__ep_session
 
 
+class ActEpisodeMixin(object):
+
+    def act_and_train_episode(self, observation):
+        """Select actions for training.
+
+        Arguments:
+            observation: The first observation
+
+        Receives:
+            (observation, reward, stop)
+
+        Yields:
+            action
+        """
+        reward = None
+        stop = False
+        while not stop:
+            action = self.act_and_train(observation, reward)
+            observation, reward, stop = yield action
+        self.stop_episode_and_train(
+            observation, reward,
+            done=observation is None)
+
+    def act_episode(self):
+        """Select actions for evaluation.
+
+        Arguments:
+            observation: The first observation
+
+        Receives:
+            observation
+
+        Yields:
+            action
+        """
+        reward = None
+        stop = False
+        while not stop:
+            action = self.act(observation)
+            observation, reward, stop = yield action
+        self.stop_episode()
+
+
 class AttributeSavingMixin(object):
     """Mixin that provides save and load functionalities."""
 

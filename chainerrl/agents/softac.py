@@ -293,7 +293,7 @@ class SoftActorCritic(AttributeSavingMixin, Agent):
 
         # greedy_action = self.act(state)
         # action = self.explorer.select_action(self.t, lambda: greedy_action)
-        action = self.act(state)
+        action = self._act(state, 'sample')
         self.t += 1
 
         # Update the target network
@@ -319,10 +319,17 @@ class SoftActorCritic(AttributeSavingMixin, Agent):
         return self.last_action
 
     def act(self, state):
+        return self._act(state, 'argmax')
+
+    def _act(self, state, sample_or_argmax):
 
         with chainer.using_config('train', False):
             s = batch_states([state], self.xp, self.phi)
-            action = self.policy(s).sample()
+            distrib = self.policy(s)
+            if sample_or_argmax == 'sample':
+                action = distrib.sample()
+            elif sample_or_argmax == 'argmax':
+                action = distrib.most_probable
             # Q is not needed here, but log it just for information
             q = self.q_function(s, action)
 

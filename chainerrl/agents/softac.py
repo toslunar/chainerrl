@@ -219,13 +219,15 @@ class SoftActorCritic(AttributeSavingMixin, Agent):
         batch_state = batch['state']
         batch_action = batch['action']
 
+        log_prob = self.policy(batch_state).log_prob(batch_action)
+
         with chainer.no_backprop_mode():
             advantage = (
                 F.reshape(self.q_function(batch_state, batch_action), (-1,))
+                - self.entropy_coef * log_prob
                 - F.reshape(self.v_function(batch_state), (-1,))
             )
 
-        log_prob = self.policy(batch_state).log_prob(batch_action)
 
         loss = -F.mean(log_prob * advantage)
 

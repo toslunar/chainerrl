@@ -17,73 +17,43 @@ from chainerrl.agent import Agent
 from chainerrl.agent import AttributeSavingMixin
 from chainerrl.misc.batch_states import batch_states
 from chainerrl.misc.copy_param import synchronize_parameters
-from chainerrl.recurrent import Recurrent
-from chainerrl.recurrent import RecurrentChainMixin
-from chainerrl.recurrent import state_kept
+# from chainerrl.recurrent import Recurrent
+# from chainerrl.recurrent import RecurrentChainMixin
+# from chainerrl.recurrent import state_kept
 from chainerrl.replay_buffer import batch_experiences
 from chainerrl.replay_buffer import ReplayUpdater
 
 
-def disable_train(chain):
-    call_orig = chain.__call__
+class SoftActorCriticModel(chainer.Chain):
 
-    def call_test(self, x):
-        with chainer.using_config('train', False):
-            return call_orig(self, x)
-
-    chain.__call__ = call_test
-
-
-class DDPGModel(chainer.Chain, RecurrentChainMixin):
-
-    def __init__(self, policy, q_func):
-        super().__init__(policy=policy, q_function=q_func)
+    def __init__(self, policy, q_function, v_function):
+        super().__init__()
+        with self.init_scope():
+            self.policy = policy
+            self.q_function = q_function
+            self.v_function = v_function
 
 
-class DDPG(AttributeSavingMixin, Agent):
-    """Deep Deterministic Policy Gradients.
+class SoftActorCritic(AttributeSavingMixin, Agent):
+    """Soft Actor-Critic
 
-    This can be used as SVG(0) by specifying a Gaussian policy instead of a
-    deterministic policy.
+    See https://arxiv.org/abs/1801.01290
 
     Args:
-        model (DDPGModel): DDPG model that contains both a policy and a
-            Q-function
-        actor_optimizer (Optimizer): Optimizer setup with the policy
-        critic_optimizer (Optimizer): Optimizer setup with the Q-function
-        replay_buffer (ReplayBuffer): Replay buffer
-        gamma (float): Discount factor
-        explorer (Explorer): Explorer that specifies an exploration strategy.
-        gpu (int): GPU device id if not None nor negative.
-        replay_start_size (int): if the replay buffer's size is less than
-            replay_start_size, skip update
-        minibatch_size (int): Minibatch size
-        update_interval (int): Model update interval in step
-        target_update_interval (int): Target model update interval in step
-        phi (callable): Feature extractor applied to observations
-        target_update_method (str): 'hard' or 'soft'.
-        soft_update_tau (float): Tau of soft target update.
-        n_times_update (int): Number of repetition of update
-        average_q_decay (float): Decay rate of average Q, only used for
-            recording statistics
-        average_loss_decay (float): Decay rate of average loss, only used for
-            recording statistics
-        batch_accumulator (str): 'mean' or 'sum'
-        episodic_update (bool): Use full episodes for update if set True
-        episodic_update_len (int or None): Subsequences of this length are used
-            for update if set int and episodic_update=True
-        logger (Logger): Logger used
-        batch_states (callable): method which makes a batch of observations.
-            default is `chainerrl.misc.batch_states.batch_states`
     """
 
-    saved_attributes = ('model',
-                        'target_model',
-                        'actor_optimizer',
-                        'critic_optimizer')
+    saved_attributes = (
+        'model',
+        'target_v_function',
+        'actor_optimizer',
+        'q_optimizer',
+        'v_optimizer',
+    )
 
-    def __init__(self, model, actor_optimizer, critic_optimizer, replay_buffer,
-                 gamma, explorer,
+    def __init__(self, model, actor_optimizer, q_optimizer, v_optimizer,
+                 replay_buffer,
+                 gamma, # explorer,
+                 entropy_coef,
                  gpu=None, replay_start_size=50000,
                  minibatch_size=32, update_interval=1,
                  target_update_interval=10000,
@@ -94,8 +64,7 @@ class DDPG(AttributeSavingMixin, Agent):
                  average_loss_decay=0.99,
                  episodic_update=False,
                  episodic_update_len=None,
-                 logger=getLogger(__name__),
-                 batch_states=batch_states):
+                 logger=getLogger(__name__)):
 
         self.model = model
 
@@ -106,7 +75,8 @@ class DDPG(AttributeSavingMixin, Agent):
         self.xp = self.model.xp
         self.replay_buffer = replay_buffer
         self.gamma = gamma
-        self.explorer = explorer
+        # self.explorer = explorer
+        self.entropy_coef = entropy_coef
         self.gpu = gpu
         self.target_update_interval = target_update_interval
         self.phi = phi
@@ -116,7 +86,8 @@ class DDPG(AttributeSavingMixin, Agent):
         self.average_q_decay = average_q_decay
         self.average_loss_decay = average_loss_decay
         self.actor_optimizer = actor_optimizer
-        self.critic_optimizer = critic_optimizer
+        self.q_optimizer = q_optimizer
+        self.v_optimizer = v_optimizer
         if episodic_update:
             update_func = self.update_from_episodes
         else:
@@ -131,36 +102,62 @@ class DDPG(AttributeSavingMixin, Agent):
             replay_start_size=replay_start_size,
             update_interval=update_interval,
         )
-        self.batch_states = batch_states
 
         self.t = 0
         self.last_state = None
         self.last_action = None
-        self.target_model = copy.deepcopy(self.model)
-        disable_train(self.target_model['q_function'])
-        disable_train(self.target_model['policy'])
+        self.target_v_function = copy.deepcopy(self.model['v_function'])
         self.average_q = 0
         self.average_actor_loss = 0.0
-        self.average_critic_loss = 0.0
+        self.average_q_loss = 0.0
+        self.average_v_loss = 0.0
 
         # Aliases for convenience
-        self.q_function = self.model['q_function']
         self.policy = self.model['policy']
-        self.target_q_function = self.target_model['q_function']
-        self.target_policy = self.target_model['policy']
+        self.q_function = self.model['q_function']
+        self.v_function = self.model['v_function']
 
         self.sync_target_network()
 
     def sync_target_network(self):
         """Synchronize target network with current network."""
         synchronize_parameters(
-            src=self.model,
-            dst=self.target_model,
+            src=self.v_function,
+            dst=self.target_v_function,
             method=self.target_update_method,
             tau=self.soft_update_tau)
 
+    # Update V-function
+    def compute_v_loss(self, batch):
+        batch_next_state = batch['next_state']
+        batch_rewards = batch['reward']
+        batch_terminal = batch['is_state_terminal']
+        batch_state = batch['state']
+        batch_actions = batch['action']
+        batch_next_actions = batch['next_action']
+        batchsize = len(batch_rewards)
+
+        with chainer.no_backprop_mode():
+            target_v = (
+                F.reshape(self.q_function(batch_state, batch_actions), (-1,))
+                - (self.entropy_coef
+                   * self.policy(batch_state).log_prob(batch_actions)))
+
+        predict_v = F.reshape(self.v_function(batch_state), (-1,))
+
+        loss = 0.5 * F.mean_squared_error(predict_v, target_v)
+
+        # Update stats
+        self.average_v_loss += (
+            (1 - self.average_loss_decay)
+            * (float(loss.data) - self.average_v_loss)
+        )
+
+        return loss
+
+
     # Update Q-function
-    def compute_critic_loss(self, batch):
+    def compute_q_loss(self, batch):
         """Compute loss for critic.
 
         Preconditions:
@@ -182,34 +179,29 @@ class DDPG(AttributeSavingMixin, Agent):
         batchsize = len(batch_rewards)
 
         with chainer.no_backprop_mode():
-            # Target policy observes s_{t+1}
-            next_actions = self.target_policy(
-                batch_next_state).sample()
+            with chainer.using_config('train', False):
+                next_v = F.reshape(
+                    self.target_v_function(batch_next_state), (-1,))
 
-            # Q(s_{t+1}, mu(a_{t+1})) is evaluated.
-            # This should not affect the internal state of Q.
-            with state_kept(self.target_q_function):
-                next_q = self.target_q_function(batch_next_state, next_actions)
-
-            # Target Q-function observes s_{t+1} and a_{t+1}
-            if isinstance(self.target_q_function, Recurrent):
-                self.target_q_function.update_state(
-                    batch_next_state, batch_next_actions)
+            # # Target Q-function observes s_{t+1} and a_{t+1}
+            # if isinstance(self.target_q_function, Recurrent):
+            #     self.target_q_function.update_state(
+            #         batch_next_state, batch_next_actions)
 
             target_q = batch_rewards + self.gamma * \
-                (1.0 - batch_terminal) * F.reshape(next_q, (batchsize,))
+                (1.0 - batch_terminal) * next_v
 
         # Estimated Q-function observes s_t and a_t
         predict_q = F.reshape(
-            self.q_function(batch_state, batch_actions),
-            (batchsize,))
+            self.q_function(batch_state, batch_actions), (-1,))
 
-        loss = F.mean_squared_error(target_q, predict_q)
+        loss = 0.5 * F.mean_squared_error(predict_q, target_q)
 
         # Update stats
-        self.average_critic_loss *= self.average_loss_decay
-        self.average_critic_loss += ((1 - self.average_loss_decay) *
-                                     float(loss.data))
+        self.average_q_loss += (
+            (1 - self.average_loss_decay)
+            * (float(loss.data) - self.average_q_loss)
+        )
 
         return loss
 
@@ -226,40 +218,36 @@ class DDPG(AttributeSavingMixin, Agent):
 
         batch_state = batch['state']
         batch_action = batch['action']
-        batch_size = len(batch_action)
 
-        # Estimated policy observes s_t
-        onpolicy_actions = self.policy(batch_state).sample()
+        with chainer.no_backprop_mode():
+            advantage = (
+                F.reshape(self.q_function(batch_state, batch_action), (-1,))
+                - F.reshape(self.v_function(batch_state), (-1,))
+            )
 
-        # Q(s_t, mu(s_t)) is evaluated.
-        # This should not affect the internal state of Q.
-        with state_kept(self.q_function):
-            q = self.q_function(batch_state, onpolicy_actions)
+        log_prob = self.policy(batch_state).log_prob(batch_action)
 
-        # Estimated Q-function observes s_t and a_t
-        if isinstance(self.q_function, Recurrent):
-            self.q_function.update_state(batch_state, batch_action)
-
-        # Avoid the numpy #9165 bug (see also: chainer #2744)
-        q = q[:, :]
-
-        # Since we want to maximize Q, loss is negation of Q
-        loss = - F.sum(q) / batch_size
+        loss = -F.mean(log_prob * advantage)
 
         # Update stats
-        self.average_actor_loss *= self.average_loss_decay
-        self.average_actor_loss += ((1 - self.average_loss_decay) *
-                                    float(loss.data))
+        self.average_actor_loss += (
+            (1 - self.average_loss_decay)
+            * (float(loss.data) - self.average_actor_loss)
+        )
+
         return loss
 
     def update(self, experiences, errors_out=None):
         """Update the model from experiences"""
 
         batch = batch_experiences(experiences, self.xp, self.phi)
-        self.critic_optimizer.update(lambda: self.compute_critic_loss(batch))
-        self.actor_optimizer.update(lambda: self.compute_actor_loss(batch))
+        self.v_optimizer.update(self.compute_v_loss, batch)
+        self.q_optimizer.update(self.compute_q_loss, batch)
+        self.actor_optimizer.update(self.compute_actor_loss, batch)
 
     def update_from_episodes(self, episodes, errors_out=None):
+        assert False
+
         # Sort episodes desc by their lengths
         sorted_episodes = list(reversed(sorted(episodes, key=len)))
         max_epi_len = len(sorted_episodes[0])
@@ -303,8 +291,9 @@ class DDPG(AttributeSavingMixin, Agent):
 
         self.logger.debug('t:%s r:%s', self.t, reward)
 
-        greedy_action = self.act(state)
-        action = self.explorer.select_action(self.t, lambda: greedy_action)
+        # greedy_action = self.act(state)
+        # action = self.explorer.select_action(self.t, lambda: greedy_action)
+        action = self.act(state)
         self.t += 1
 
         # Update the target network
@@ -332,7 +321,7 @@ class DDPG(AttributeSavingMixin, Agent):
     def act(self, state):
 
         with chainer.using_config('train', False):
-            s = self.batch_states([state], self.xp, self.phi)
+            s = batch_states([state], self.xp, self.phi)
             action = self.policy(s).sample()
             # Q is not needed here, but log it just for information
             q = self.q_function(s, action)
@@ -364,13 +353,14 @@ class DDPG(AttributeSavingMixin, Agent):
     def stop_episode(self):
         self.last_state = None
         self.last_action = None
-        if isinstance(self.model, Recurrent):
-            self.model.reset_state()
+        # if isinstance(self.model, Recurrent):
+        #     self.model.reset_state()
         self.replay_buffer.stop_current_episode()
 
     def get_statistics(self):
         return [
             ('average_q', self.average_q),
             ('average_actor_loss', self.average_actor_loss),
-            ('average_critic_loss', self.average_critic_loss),
+            ('average_q_loss', self.average_q_loss),
+            ('average_v_loss', self.average_v_loss),
         ]

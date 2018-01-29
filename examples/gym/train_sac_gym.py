@@ -32,28 +32,28 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--outdir', type=str, default='out')
-    parser.add_argument('--env', type=str, default='Humanoid-v1')
+    parser.add_argument('--env', type=str, default='HalfCheetah-v1')
     parser.add_argument('--seed', type=int, default=None)
     parser.add_argument('--gpu', type=int, default=0)
     parser.add_argument('--final-exploration-steps',
                         type=int, default=10 ** 6)
-    parser.add_argument('--actor-lr', type=float, default=1e-4)
-    parser.add_argument('--critic-lr', type=float, default=1e-3)
+    parser.add_argument('--actor-lr', type=float, default=3e-4)
+    parser.add_argument('--critic-lr', type=float, default=3e-4)
     parser.add_argument('--load', type=str, default='')
     parser.add_argument('--steps', type=int, default=10 ** 7)
-    parser.add_argument('--n-hidden-channels', type=int, default=300)
-    parser.add_argument('--n-hidden-layers', type=int, default=3)
+    parser.add_argument('--n-hidden-channels', type=int, default=128)
+    parser.add_argument('--n-hidden-layers', type=int, default=2)
     parser.add_argument('--replay-start-size', type=int, default=5000)
-    parser.add_argument('--n-update-times', type=int, default=1)
+    parser.add_argument('--n-update-times', type=int, default=4)
     parser.add_argument('--target-update-interval',
                         type=int, default=1)
     parser.add_argument('--target-update-method',
                         type=str, default='soft', choices=['hard', 'soft'])
     parser.add_argument('--soft-update-tau', type=float, default=1e-2)
-    parser.add_argument('--update-interval', type=int, default=4)
+    parser.add_argument('--update-interval', type=int, default=1)
     parser.add_argument('--eval-n-runs', type=int, default=100)
     parser.add_argument('--eval-interval', type=int, default=10 ** 5)
-    parser.add_argument('--gamma', type=float, default=0.995)
+    parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--minibatch-size', type=int, default=200)
     parser.add_argument('--render', action='store_true')
     parser.add_argument('--demo', action='store_true')
@@ -151,9 +151,11 @@ def main():
 
     # ou_sigma = (action_space.high - action_space.low) * 0.2
     # explorer = explorers.AdditiveOU(sigma=ou_sigma)
+    entropy_coef = args.reward_scale_factor
+
     agent = SoftActorCritic(
         model, opt_a, opt_qc, opt_vc, rbuf, gamma=args.gamma,
-        entropy_coef=1.0,
+        entropy_coef=entropy_coef,
         # explorer=explorer,
         replay_start_size=args.replay_start_size,
         target_update_method=args.target_update_method,

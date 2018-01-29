@@ -138,10 +138,11 @@ class SoftActorCritic(AttributeSavingMixin, Agent):
         batchsize = len(batch_rewards)
 
         with chainer.no_backprop_mode():
+            log_prob = self.policy(batch_state).log_prob(batch_actions)
+            # log_prob = F.clip(log_prob, -100.0, self.xp.inf)  # TODO
             target_v = (
                 F.reshape(self.q_function(batch_state, batch_actions), (-1,))
-                - (self.entropy_coef
-                   * self.policy(batch_state).log_prob(batch_actions)))
+                - self.entropy_coef * log_prob)
 
         predict_v = F.reshape(self.v_function(batch_state), (-1,))
 
@@ -153,6 +154,7 @@ class SoftActorCritic(AttributeSavingMixin, Agent):
             * (float(loss.data) - self.average_v_loss)
         )
 
+        # self.logger.debug('v_loss: %s', float(loss.data))
         return loss
 
 
@@ -203,6 +205,7 @@ class SoftActorCritic(AttributeSavingMixin, Agent):
             * (float(loss.data) - self.average_q_loss)
         )
 
+        # self.logger.debug('q_loss: %s', float(loss.data))
         return loss
 
     def compute_actor_loss(self, batch):
@@ -228,6 +231,7 @@ class SoftActorCritic(AttributeSavingMixin, Agent):
                 - F.reshape(self.v_function(batch_state), (-1,))
             )
 
+        # log_prob = F.clip(log_prob, -100.0, self.xp.inf)  # TODO
 
         loss = -F.mean(log_prob * advantage)
 
@@ -237,6 +241,7 @@ class SoftActorCritic(AttributeSavingMixin, Agent):
             * (float(loss.data) - self.average_actor_loss)
         )
 
+        # self.logger.debug('pi_loss: %s', float(loss.data))
         return loss
 
     def update(self, experiences, errors_out=None):

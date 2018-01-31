@@ -35,6 +35,7 @@ class NewLSTM(chainer.Chain):
                 dtype=x.dtype))
 
     def __call__(self, xs):
+        assert isinstance(xs, tuple)
         assert all(
             len(x0.data) >= len(x1.data)
             for x0, x1 in zip(xs, xs[1:])

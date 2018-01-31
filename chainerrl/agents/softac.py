@@ -40,6 +40,9 @@ class SoftActorCritic(AttributeSavingMixin, Agent):
     See https://arxiv.org/abs/1801.01290
 
     Args:
+        act_deterministically (bool): If set true, choose most probable actions
+            in act method.
+
     """
 
     saved_attributes = (
@@ -64,6 +67,7 @@ class SoftActorCritic(AttributeSavingMixin, Agent):
                  average_loss_decay=0.99,
                  episodic_update=False,
                  episodic_update_len=None,
+                 act_deterministically=False,
                  logger=getLogger(__name__)):
 
         self.model = model
@@ -102,6 +106,7 @@ class SoftActorCritic(AttributeSavingMixin, Agent):
             replay_start_size=replay_start_size,
             update_interval=update_interval,
         )
+        self.act_deterministically = act_deterministically
 
         self.t = 0
         self.last_state = None
@@ -326,7 +331,7 @@ class SoftActorCritic(AttributeSavingMixin, Agent):
         return self.last_action
 
     def act(self, state):
-        return self._act(state, 'argmax')
+        return self._act(state, 'argmax' if self.act_deterministically else 'sample')
 
     def _act(self, state, sample_or_argmax):
 

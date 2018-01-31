@@ -58,6 +58,7 @@ def main():
     parser.add_argument('--use-bn', action='store_true', default=False)
     parser.add_argument('--monitor', action='store_true')
     parser.add_argument('--reward-scale-factor', type=float, default=1e-2)
+    parser.add_argument('--entropy-coef', type=float, default=1e-2)
     args = parser.parse_args()
 
     args.outdir = experiments.prepare_output_dir(
@@ -149,11 +150,10 @@ def main():
 
     # ou_sigma = (action_space.high - action_space.low) * 0.2
     # explorer = explorers.AdditiveOU(sigma=ou_sigma)
-    entropy_coef = args.reward_scale_factor
 
     agent = SoftActorCritic(
         model, opt_a, opt_qc, opt_vc, rbuf, gamma=args.gamma,
-        entropy_coef=entropy_coef,
+        entropy_coef=args.entropy_coef,
         # explorer=explorer,
         replay_start_size=args.replay_start_size,
         target_update_method=args.target_update_method,

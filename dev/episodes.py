@@ -1,5 +1,12 @@
+import chainer
+from chainer.backends import cuda
+import chainer.functions as F
+import chainer.links as L
+
+from chainerrl.action_value import DiscreteActionValue
 from chainerrl.links.mlp import MLP
 from chainerrl.q_function import StateQFunction
+from chainerrl.recurrent import Recurrent
 
 
 class NewLSTM(chainer.Chain):
@@ -7,7 +14,7 @@ class NewLSTM(chainer.Chain):
         super().__init__()
         with self.init_scope():
             self.nstep = chainer.links.NStepLSTM(
-                n_layers=1, in_size=in_size, out_size=out_size)
+                n_layers=1, in_size=in_size, out_size=out_size, dropout=0.)
 
         self.reset_state()
 
@@ -15,7 +22,7 @@ class NewLSTM(chainer.Chain):
         return self._states
 
     def set_state(self, state):
-        self._state = state
+        self._states = state
 
     def reset_state(self):
         self._states = None, None
@@ -23,7 +30,7 @@ class NewLSTM(chainer.Chain):
     def _init_hx(self, xs):
         x = xs[0]
         with cuda.get_device_from_id(self._device_id):
-            return variable.Variable(self.xp.zeros(
+            return chainer.Variable(self.xp.zeros(
                 (1, len(x), self.nstep.out_size),
                 dtype=xs[0].dtype))
 
@@ -33,7 +40,7 @@ class NewLSTM(chainer.Chain):
             for x0, x1 in zip(xs, xs[1:])
         ), "inputs must be sorted in descending order of their lengths"
 
-        hx, cx = self._state
+        hx, cx = self._states
 
         if hx is None:
             hx = self._init_hx(xs)
@@ -48,7 +55,7 @@ class NewLSTM(chainer.Chain):
             self.nstep.n_layers, self.nstep.dropout,
             hx, cx, ws, bs, xs)
 
-        self._state = hy, cy
+        self._states = hy, cy
         return ys
 
 
@@ -98,5 +105,6 @@ class NewFCLSTMStateQFunction(chainer.Chain, StateQFunction, Recurrent):
             assert sections[-1] == len(x)
             h = chainer.functions.split_axis(h, sections[:-1])
         h = self.lstm(h)
+        h = chainer.functions.concat(h, axis=0)
 
         return DiscreteActionValue(self.out(h))

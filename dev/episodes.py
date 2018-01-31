@@ -32,7 +32,7 @@ class NewLSTM(chainer.Chain):
         with cuda.get_device_from_id(self._device_id):
             return chainer.Variable(self.xp.zeros(
                 (1, len(x), self.nstep.out_size),
-                dtype=xs[0].dtype))
+                dtype=x.dtype))
 
     def __call__(self, xs):
         assert all(
@@ -103,7 +103,7 @@ class NewFCLSTMStateQFunction(chainer.Chain, StateQFunction, Recurrent):
         else:
             sections = xp.cumsum(batch_sizes)
             assert sections[-1] == len(x)
-            h = chainer.functions.split_axis(h, sections[:-1])
+            h = chainer.functions.split_axis(h, sections[:-1], axis=0)
         h = self.lstm(h)
         h = chainer.functions.concat(h, axis=0)
 

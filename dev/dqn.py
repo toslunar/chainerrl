@@ -1,12 +1,21 @@
+import chainer
+import chainer.functions as F
+
 import chainerrl
+from chainerrl import recurrent
 
 
 class NewDQN(chainerrl.agents.DQN):
 
-    def input_initial_batch_to_target_model(self, batch, batch_sizes):
-        super().input_initial_batch_to_target_model({
-            'state': batch['state'][:batch_sizes[0]]
-        })
+    def input_initial_batch_to_target_model(self, batch):
+        try:
+            batch_sizes = self._batch_sizes
+            batch = {
+                'state': batch['state'][:batch_sizes[0]]
+            }
+        except:
+            pass
+        super().input_initial_batch_to_target_model(batch)
 
     def update_from_episodes(self, episodes, errors_out=None):
         has_weights = isinstance(episodes, tuple)
@@ -45,27 +54,24 @@ class NewDQN(chainerrl.agents.DQN):
             batch_sizes.append(len(transitions))
             transposed_episodes.extend(transitions)
 
-        batch = batch_experiences(transposed_episodes,
+        batch = chainerrl.replay_buffer.batch_experiences(transposed_episodes,
                                   xp=self.xp,
                                   phi=self.phi,
                                   batch_states=self.batch_states)
 
-        """
         if has_weights:
+            """
             sorted_weights = [weights[index] for index in indices]  # sorted by len(ep)
             batch['weights'] = self.xp.asarray(
                 sorted_weights, dtype=self.xp.float32)
-        """
-        batch['weights'] = self.xp.asarray(
-            weights_step, dtype=self.xp.float32)
+            """
+            batch['weights'] = self.xp.asarray(
+                weights_step, dtype=self.xp.float32)
 
-        with state_reset(self.model):
-            with state_reset(self.target_model):
-                self.input_initial_batch_to_target_model({
-                    'state': batch['state'][:batch_sizes[0]]
-                })
-
+        with recurrent.state_reset(self.model):
+            with recurrent.state_reset(self.target_model):
                 self._batch_sizes = self.xp.asarray(batch_sizes)
+                self.input_initial_batch_to_target_model(batch)
                 loss = self._compute_loss(batch, self.gamma,
                                           errors_out=errors_out_step)
 
@@ -81,7 +87,7 @@ class NewDQN(chainerrl.agents.DQN):
         if has_weights:
             sections = xp.cumsum(batch_sizes)
             assert sections[-1] == len(x)
-            errors_out_step = chainer.functions.split_axis(errors_out_step, sections[:-1])
+            errors_out_step = chainer.functions.split_axis(errors_out_step, sections[:-1], axis=0)
             for errors in errors_out_step:
                 for err, index in zip(errors, indices):  # TODO: this is slow
                     errors_out[index] += err

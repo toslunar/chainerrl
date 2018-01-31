@@ -148,9 +148,9 @@ def main():
             rbuf = replay_buffer.PrioritizedEpisodicReplayBuffer(
                 rbuf_capacity, betasteps=betasteps)
         else:
-            assert False
             rbuf = replay_buffer.EpisodicReplayBuffer(rbuf_capacity)
     else:
+        assert False
         if args.minibatch_size is None:
             args.minibatch_size = 32
         if args.prioritized_replay:

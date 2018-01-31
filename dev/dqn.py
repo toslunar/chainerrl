@@ -85,12 +85,10 @@ class NewDQN(chainerrl.agents.DQN):
                 self.optimizer.update()
 
         if has_weights:
-            sections = xp.cumsum(batch_sizes)
-            assert sections[-1] == len(x)
-            errors_out_step = chainer.functions.split_axis(errors_out_step, sections[:-1], axis=0)
-            for errors in errors_out_step:
-                for err, index in zip(errors, indices):  # TODO: this is slow
-                    errors_out[index] += err
+            it = iter(errors_out_step)
+            for bs in batch_sizes:
+                for index in indices[:bs]:
+                    errors_out[index] += next(it)
             
             self.replay_buffer.update_errors(errors_out)
 

@@ -16,11 +16,8 @@ install:
       pip install chainer
       pip install pytest-cov
     fi
-  - pip install -r requirements.txt --only-binary=numpy,scipy
+  - pip install -r requirements-dev.txt --only-binary=numpy,scipy
   - pip install jupyter
-  - pip install atari_py>=0.1.1
-  - pip install hacking
-  - pip install autopep8
   - pip install coveralls
   - python setup.py develop
   - python -c "import numpy; numpy.show_config()"

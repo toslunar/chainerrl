@@ -1,6 +1,6 @@
 -r requirements.txt
 autopep8
-atari_py
+atari_py>=0.1.1
 hacking
 mock
 pytest

@@ -10,3 +10,4 @@ API Reference
    distributions
    experiments
    recurrent
+   replay_buffer

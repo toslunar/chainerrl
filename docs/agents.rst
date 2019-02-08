@@ -11,32 +11,22 @@ Agent interfaces
 Agent implementations
 =====================
 
-.. autoclass:: chainerrl.agents.A3C
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
 
-.. autoclass:: chainerrl.agents.ACER
-
-.. autoclass:: chainerrl.agents.AL
-
-.. autoclass:: chainerrl.agents.DDPG
-
-.. autoclass:: chainerrl.agents.DoubleDQN
-
-.. autoclass:: chainerrl.agents.DoublePAL
-
-.. autoclass:: chainerrl.agents.DPP
-
-.. autoclass:: chainerrl.agents.DQN
-
-.. autoclass:: chainerrl.agents.NSQ
-
-.. autoclass:: chainerrl.agents.PAL
-
-.. autoclass:: chainerrl.agents.PCL
-
-.. autoclass:: chainerrl.agents.PGT
-
-.. autoclass:: chainerrl.agents.REINFORCE
-
-.. autoclass:: chainerrl.agents.ResidualDQN
-
-.. autoclass:: chainerrl.agents.SARSA
+   chainerrl.agents.A3C
+   chainerrl.agents.ACER
+   chainerrl.agents.AL
+   chainerrl.agents.DDPG
+   chainerrl.agents.DoubleDQN
+   chainerrl.agents.DoublePAL
+   chainerrl.agents.DPP
+   chainerrl.agents.DQN
+   chainerrl.agents.NSQ
+   chainerrl.agents.PAL
+   chainerrl.agents.PCL
+   chainerrl.agents.PGT
+   chainerrl.agents.REINFORCE
+   chainerrl.agents.ResidualDQN
+   chainerrl.agents.SARSA
